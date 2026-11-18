@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import '../data/dummy_events.dart';
 import '../widgets/event_card.dart';
@@ -10,40 +9,44 @@ class EventsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(20),
         children: [
-          const SizedBox(height: 12),
-          Text(
+          const Text(
             'Campus Events',
-            style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             'Discover what is happening around campus.',
-            style: TextStyle(color: Colors.grey.shade600),
+            style: TextStyle(
+              fontSize: 15,
+              color: Colors.grey.shade600,
+            ),
           ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              const Icon(Icons.event_available_outlined),
-              const SizedBox(width: 8),
-              Text(
-                '${dummyEvents.length} upcoming events',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+          const SizedBox(height: 20),
+          Text(
+            '${dummyEvents.length} upcoming events',
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
           ),
           const SizedBox(height: 16),
+
+          // Display all campus events
           ...dummyEvents.map(
-            (event) => EventCard(event: event),
+            (event) => EventCard(
+              event: event,
+              onTap: () {
+                // Event details navigation will be added next.
+              },
+            ),
           ),
         ],
       ),
     );
   }
 }
-
