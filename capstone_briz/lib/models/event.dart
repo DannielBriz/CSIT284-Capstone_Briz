@@ -3,22 +3,18 @@ class Event {
   final String id;
   final String title;
   final String description;
+  final DateTime dateTime;
   final String venue;
-  final DateTime date;
-  final String time;
-  final int attendeeCount;
   final String category;
-  final String imageUrl;
+  final int attendeeCount;
 
   const Event({
     required this.id,
     required this.title,
     required this.description,
+    required this.dateTime,
     required this.venue,
-    required this.date,
-    required this.time,
-    required this.attendeeCount,
     required this.category,
-    required this.imageUrl,
+    this.attendeeCount = 0,
   });
 }
