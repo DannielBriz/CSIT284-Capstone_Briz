@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import '../data/dummy_events.dart';
 import '../widgets/event_card.dart';
+import '../models/event.dart';
 
 class EventsScreen extends StatelessWidget {
-  const EventsScreen({super.key});
+  final void Function(Event event) onOpenEvent;
+
+  const EventsScreen({
+    super.key,
+    required this.onOpenEvent,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -36,13 +42,10 @@ class EventsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // Display all campus events
           ...dummyEvents.map(
             (event) => EventCard(
               event: event,
-              onTap: () {
-                // Event details navigation will be added next.
-              },
+              onTap: () => onOpenEvent(event),
             ),
           ),
         ],
