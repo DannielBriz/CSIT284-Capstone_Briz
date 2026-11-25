@@ -1,5 +1,9 @@
+
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../models/event.dart';
+import 'edit_event_screen.dart';
 
 class EventDetailsScreen extends StatefulWidget {
   final Event event;
@@ -19,11 +23,13 @@ class EventDetailsScreen extends StatefulWidget {
 
 class _EventDetailsScreenState extends State<EventDetailsScreen> {
   late bool _isRegistered;
+  late Event _event;
 
   @override
   void initState() {
     super.initState();
     _isRegistered = widget.isRegistered;
+    _event = widget.event;
   }
 
   String _formatDate(DateTime date) {
@@ -48,7 +54,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   IconData _getCategoryIcon() {
-    switch (widget.event.category.toLowerCase()) {
+    switch (_event.category.toLowerCase()) {
       case 'technology':
         return Icons.computer;
       case 'sports':
@@ -80,9 +86,59 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     );
   }
 
+  Future<void> _editEvent() async {
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (context) => EditEventScreen(event: _event),
+      ),
+    );
+
+    if (result == true && mounted) {
+      // Fetch the updated event from Firestore.
+      try {
+        final document = await FirebaseFirestore.instance
+            .collection('events')
+            .doc(_event.id)
+            .get();
+
+        if (document.exists && document.data() != null) {
+          final data = document.data()!;
+
+          setState(() {
+            _event = Event(
+              id: document.id,
+              title: data['title'] ?? '',
+              description: data['description'] ?? '',
+              dateTime: (data['dateTime'] as Timestamp).toDate(),
+              venue: data['venue'] ?? '',
+              category: data['category'] ?? '',
+              attendeeCount: data['attendeeCount'] ?? 0,
+            );
+          });
+        }
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Event details refreshed successfully!'),
+          ),
+        );
+      } catch (error) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Event saved, but refresh failed: $error'),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final event = widget.event;
+    final event = _event;
     final theme = Theme.of(context);
     final attendeeCount =
         event.attendeeCount + (_isRegistered ? 1 : 0);
@@ -90,6 +146,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Event Details'),
+        actions: [
+          IconButton(
+            onPressed: _editEvent,
+            icon: const Icon(Icons.edit),
+            tooltip: 'Edit Event',
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
