@@ -1,28 +1,61 @@
-
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import 'firebase_options.dart';
 import 'screens/home_screen.dart';
 import 'services/event_seed.dart';
+import 'services/auth_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  print('MAIN: Initializing Firebase...');
+  try {
+    debugPrint('MAIN: Initializing Firebase...');
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
 
-  print('MAIN: Firebase initialized successfully.');
-  print('MAIN: Before seeder');
+    debugPrint('MAIN: Firebase initialized successfully.');
 
-  await EventSeed.seedEvents();
+    // Authenticate before starting the app.
+    debugPrint('MAIN: Signing in user...');
 
-  print('MAIN: After seeder');
+    final user = await AuthService.ensureSignedIn();
 
-  runApp(const SchoolEventRsvpApp());
+    debugPrint('MAIN: Authentication complete.');
+    debugPrint('MAIN: User UID = ${user.uid}');
+    debugPrint('MAIN: Signed in = ${AuthService.isSignedIn}');
+
+    // Seed sample events.
+    debugPrint('MAIN: Before seeder');
+
+    await EventSeed.seedEvents();
+
+    debugPrint('MAIN: After seeder');
+
+    // Start the app.
+    runApp(const SchoolEventRsvpApp());
+  } catch (e, stackTrace) {
+    debugPrint('MAIN ERROR: $e');
+    debugPrint('$stackTrace');
+
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'App initialization failed.\n\n$e',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class SchoolEventRsvpApp extends StatelessWidget {
@@ -31,20 +64,13 @@ class SchoolEventRsvpApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Campus Events',
+      title: 'School Event RSVP',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF5B4BDB),
-          brightness: Brightness.light,
+          seedColor: Colors.deepPurple,
         ),
-        scaffoldBackgroundColor: const Color(0xFFF7F7FB),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFFF7F7FB),
-          foregroundColor: Color(0xFF202033),
-          centerTitle: false,
-        ),
+        useMaterial3: true,
       ),
       home: const HomeScreen(),
     );

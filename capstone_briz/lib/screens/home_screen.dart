@@ -19,45 +19,75 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
-  final Set<String> _registeredEventIds = {};
   final EventService _eventService = EventService();
 
-  void _toggleRsvp(Event event, bool isRegistered) {
-    setState(() {
-      if (isRegistered) {
-        _registeredEventIds.add(event.id);
-      } else {
-        _registeredEventIds.remove(event.id);
-      }
-    });
+  // =========================================================
+  // RSVP: Register or cancel registration in Firestore
+  // =========================================================
+  Future<void> _toggleRsvp(Event event, bool isRegistered) async {
+    if (isRegistered) {
+      await _eventService.registerForEvent(event.id);
+    } else {
+      await _eventService.cancelRegistration(event.id);
+    }
   }
 
-  void _openEvent(Event event) {
+  // =========================================================
+  // Open Event Details
+  // =========================================================
+  void _openEvent(Event event, Set<String> registeredEventIds) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (ctx) => EventDetailsScreen(
           event: event,
-          isRegistered: _registeredEventIds.contains(event.id),
+          isRegistered: registeredEventIds.contains(event.id),
+
+          // Return the Future so EventDetailsScreen can await it.
           onRsvpChanged: (isRegistered) {
-            _toggleRsvp(event, isRegistered);
+            return _toggleRsvp(event, isRegistered);
           },
         ),
       ),
     );
   }
 
-  void _cancelRsvp(Event event) {
-    setState(() {
-      _registeredEventIds.remove(event.id);
-    });
+  // =========================================================
+  // Cancel RSVP from My Events
+  // =========================================================
+  Future<void> _cancelRsvp(Event event) async {
+    try {
+      await _eventService.cancelRegistration(event.id);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Registration cancelled successfully.'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unable to cancel registration: $e'),
+        ),
+      );
+    }
   }
 
+  // =========================================================
+  // Bottom Navigation
+  // =========================================================
   void _selectPage(int index) {
     setState(() {
       _selectedIndex = index;
     });
   }
 
+  // =========================================================
+  // Add Event
+  // =========================================================
   Future<void> _openAddEventScreen() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -66,18 +96,22 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // =========================================================
+  // UI
+  // =========================================================
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Event>>(
       stream: _eventService.getEvents(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
+      builder: (context, eventSnapshot) {
+        if (eventSnapshot.hasError) {
           return Scaffold(
             body: Center(
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Text(
-                  'Unable to load events from Firebase.\n\n${snapshot.error}',
+                  'Unable to load events from Firebase.\n\n'
+                  '${eventSnapshot.error}',
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -85,7 +119,7 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
 
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (eventSnapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(
               child: CircularProgressIndicator(),
@@ -93,39 +127,77 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
 
-        final firestoreEvents = snapshot.data ?? [];
+        final firestoreEvents = eventSnapshot.data ?? [];
 
-        final registeredEvents = firestoreEvents
-            .where(
-              (event) => _registeredEventIds.contains(event.id),
-            )
-            .toList();
+        return StreamBuilder<Set<String>>(
+          stream: _eventService.getRegisteredEventIds(),
+          builder: (context, registrationSnapshot) {
+            if (registrationSnapshot.hasError) {
+              return Scaffold(
+                body: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Text(
+                      'Unable to load your registrations.\n\n'
+                      '${registrationSnapshot.error}',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              );
+            }
 
-        final pages = [
-          EventsScreen(onOpenEvent: _openEvent),
-          MyEventsScreen(
-            registeredEvents: registeredEvents,
-            onOpenEvent: _openEvent,
-            onCancelRsvp: _cancelRsvp,
-          ),
-        ];
+            if (registrationSnapshot.connectionState ==
+                ConnectionState.waiting) {
+              return const Scaffold(
+                body: Center(
+                  child: CircularProgressIndicator(),
+                ),
+              );
+            }
 
-        return Scaffold(
-          body: IndexedStack(
-            index: _selectedIndex,
-            children: pages,
-          ),
-          floatingActionButton: _selectedIndex == 0
-              ? FloatingActionButton.extended(
-                  onPressed: _openAddEventScreen,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Event'),
+            final registeredEventIds =
+                registrationSnapshot.data ?? <String>{};
+
+            final registeredEvents = firestoreEvents
+                .where(
+                  (event) => registeredEventIds.contains(event.id),
                 )
-              : null,
-          bottomNavigationBar: BottomNavigation(
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: _selectPage,
-          ),
+                .toList();
+
+            final pages = [
+              EventsScreen(
+                onOpenEvent: (event) {
+                  _openEvent(event, registeredEventIds);
+                },
+              ),
+              MyEventsScreen(
+                registeredEvents: registeredEvents,
+                onOpenEvent: (event) {
+                  _openEvent(event, registeredEventIds);
+                },
+                onCancelRsvp: _cancelRsvp,
+              ),
+            ];
+
+            return Scaffold(
+              body: IndexedStack(
+                index: _selectedIndex,
+                children: pages,
+              ),
+              floatingActionButton: _selectedIndex == 0
+                  ? FloatingActionButton.extended(
+                      onPressed: _openAddEventScreen,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add Event'),
+                    )
+                  : null,
+              bottomNavigationBar: BottomNavigation(
+                selectedIndex: _selectedIndex,
+                onDestinationSelected: _selectPage,
+              ),
+            );
+          },
         );
       },
     );

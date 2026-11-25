@@ -9,7 +9,7 @@ import 'edit_event_screen.dart';
 class EventDetailsScreen extends StatefulWidget {
   final Event event;
   final bool isRegistered;
-  final ValueChanged<bool> onRsvpChanged;
+  final Future<void> Function(bool isRegistered) onRsvpChanged;
 
   const EventDetailsScreen({
     super.key,
@@ -19,21 +19,29 @@ class EventDetailsScreen extends StatefulWidget {
   });
 
   @override
-  State<EventDetailsScreen> createState() =>
-      _EventDetailsScreenState();
+  State<EventDetailsScreen> createState() => _EventDetailsScreenState();
 }
 
 class _EventDetailsScreenState extends State<EventDetailsScreen> {
   late bool _isRegistered;
   late Event _event;
 
+  bool _isUpdatingRsvp = false;
+
   @override
   void initState() {
     super.initState();
     _isRegistered = widget.isRegistered;
     _event = widget.event;
+
+    debugPrint('EventDetailsScreen initialized');
+    debugPrint('Event ID: ${_event.id}');
+    debugPrint('Initial RSVP status: $_isRegistered');
   }
 
+  // =========================================================
+  // CATEGORY ICON
+  // =========================================================
   IconData _getCategoryIcon(String category) {
     switch (category.toLowerCase()) {
       case 'technology':
@@ -57,7 +65,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     }
   }
 
+  // =========================================================
+  // EDIT EVENT
+  // =========================================================
   Future<void> _editEvent() async {
+    debugPrint('Edit Event button pressed');
+
     final result = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (context) => EditEventScreen(event: _event),
@@ -96,6 +109,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         ),
       );
     } catch (error) {
+      debugPrint('Refresh event error: $error');
+
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -106,7 +121,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     }
   }
 
+  // =========================================================
+  // DELETE EVENT
+  // =========================================================
   Future<void> _deleteEvent() async {
+    debugPrint('Delete Event button pressed');
+
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -146,6 +166,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
       Navigator.of(context).pop(true);
     } catch (error) {
+      debugPrint('Delete event error: $error');
+
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -156,14 +178,75 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     }
   }
 
-  void _toggleRsvp() {
+  // =========================================================
+  // RSVP: REGISTER OR CANCEL
+  // =========================================================
+  Future<void> _toggleRsvp() async {
+    debugPrint('_toggleRsvp STARTED');
+
+    if (_isUpdatingRsvp) {
+      debugPrint('RSVP is already processing');
+      return;
+    }
+
+    final newRegistrationState = !_isRegistered;
+
+    debugPrint('Current registration: $_isRegistered');
+    debugPrint('New registration state: $newRegistrationState');
+    debugPrint('Event ID: ${_event.id}');
+
     setState(() {
-      _isRegistered = !_isRegistered;
+      _isUpdatingRsvp = true;
     });
 
-    widget.onRsvpChanged(_isRegistered);
+    try {
+      debugPrint('Calling HomeScreen RSVP callback...');
+
+      await widget.onRsvpChanged(newRegistrationState);
+
+      debugPrint('HomeScreen RSVP callback completed successfully');
+
+      if (!mounted) return;
+
+      setState(() {
+        _isRegistered = newRegistrationState;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            newRegistrationState
+                ? 'You are successfully registered!'
+                : 'Your RSVP has been cancelled.',
+          ),
+        ),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('RSVP ERROR: $error');
+      debugPrint('RSVP STACK TRACE: $stackTrace');
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 6),
+          content: Text('RSVP update failed: $error'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUpdatingRsvp = false;
+        });
+
+        debugPrint('RSVP processing finished');
+      }
+    }
   }
 
+  // =========================================================
+  // BUILD UI
+  // =========================================================
   @override
   Widget build(BuildContext context) {
     final event = _event;
@@ -183,14 +266,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Event banner
+            // EVENT BANNER
             Container(
               width: double.infinity,
               height: 180,
               decoration: BoxDecoration(
-                color: Theme.of(context)
-                    .colorScheme
-                    .primaryContainer,
+                color: Theme.of(context).colorScheme.primaryContainer,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Icon(
@@ -202,6 +283,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
             const SizedBox(height: 20),
 
+            // CATEGORY
             Chip(
               avatar: Icon(
                 _getCategoryIcon(event.category),
@@ -212,6 +294,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
             const SizedBox(height: 12),
 
+            // TITLE
             Text(
               event.title,
               style: Theme.of(context)
@@ -222,7 +305,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
             const SizedBox(height: 24),
 
-            // Event information
+            // DATE
             _buildInfoRow(
               Icons.calendar_today,
               'Date',
@@ -231,6 +314,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
             const SizedBox(height: 12),
 
+            // TIME
             _buildInfoRow(
               Icons.access_time,
               'Time',
@@ -239,6 +323,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
             const SizedBox(height: 12),
 
+            // VENUE
             _buildInfoRow(
               Icons.location_on,
               'Venue',
@@ -247,6 +332,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
             const SizedBox(height: 12),
 
+            // ATTENDEE COUNT
             _buildInfoRow(
               Icons.people,
               'Attendees',
@@ -255,6 +341,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
             const SizedBox(height: 24),
 
+            // DESCRIPTION
             Text(
               'About this Event',
               style: Theme.of(context)
@@ -272,22 +359,38 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
             const SizedBox(height: 30),
 
-            // Larger RSVP button
+            // RSVP BUTTON
             SizedBox(
               width: double.infinity,
               height: 68,
               child: ElevatedButton.icon(
-                onPressed: _toggleRsvp,
-                icon: Icon(
-                  _isRegistered
-                      ? Icons.cancel_outlined
-                      : Icons.check_circle_outline,
-                  size: 28,
-                ),
+                onPressed: _isUpdatingRsvp
+                    ? null
+                    : () {
+                        debugPrint('REGISTER BUTTON PRESSED');
+                        _toggleRsvp();
+                      },
+                icon: _isUpdatingRsvp
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Icon(
+                        _isRegistered
+                            ? Icons.cancel_outlined
+                            : Icons.check_circle_outline,
+                        size: 28,
+                      ),
                 label: Text(
-                  _isRegistered
-                      ? 'CANCEL RSVP'
-                      : 'REGISTER FOR EVENT',
+                  _isUpdatingRsvp
+                      ? 'PLEASE WAIT...'
+                      : _isRegistered
+                          ? 'CANCEL RSVP'
+                          : 'REGISTER FOR EVENT',
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -299,6 +402,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       ? Colors.red
                       : const Color(0xFF5B4BDB),
                   foregroundColor: Colors.white,
+                  disabledBackgroundColor: Colors.grey,
+                  disabledForegroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -308,31 +413,26 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
             const SizedBox(height: 30),
 
-            // Event management section moved below RSVP
+            // EVENT MANAGEMENT SECTION
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: Theme.of(context)
-                    .colorScheme
-                    .surfaceContainerHighest,
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .outlineVariant,
+                  color: Theme.of(context).colorScheme.outlineVariant,
                 ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // HEADER
                   Row(
                     children: [
                       Icon(
                         Icons.settings,
-                        color: Theme.of(context)
-                            .colorScheme
-                            .primary,
+                        color: Theme.of(context).colorScheme.primary,
                         size: 26,
                       ),
                       const SizedBox(width: 10),
@@ -355,7 +455,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
                   const SizedBox(height: 18),
 
-                  // Edit button
+                  // EDIT BUTTON
                   SizedBox(
                     width: double.infinity,
                     height: 58,
@@ -385,7 +485,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
                   const SizedBox(height: 12),
 
-                  // Delete button
+                  // DELETE BUTTON
                   SizedBox(
                     width: double.infinity,
                     height: 58,
@@ -423,6 +523,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     );
   }
 
+  // =========================================================
+  // INFORMATION ROW
+  // =========================================================
   Widget _buildInfoRow(
     IconData icon,
     String label,
