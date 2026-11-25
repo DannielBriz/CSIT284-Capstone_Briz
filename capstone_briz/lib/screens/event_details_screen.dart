@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/event.dart';
+import '../services/event_service.dart';
 import 'edit_event_screen.dart';
 
 class EventDetailsScreen extends StatefulWidget {
@@ -18,7 +19,8 @@ class EventDetailsScreen extends StatefulWidget {
   });
 
   @override
-  State<EventDetailsScreen> createState() => _EventDetailsScreenState();
+  State<EventDetailsScreen> createState() =>
+      _EventDetailsScreenState();
 }
 
 class _EventDetailsScreenState extends State<EventDetailsScreen> {
@@ -32,58 +34,27 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     _event = widget.event;
   }
 
-  String _formatDate(DateTime date) {
-    const months = [
-      'January', 'February', 'March', 'April',
-      'May', 'June', 'July', 'August',
-      'September', 'October', 'November', 'December'
-    ];
-
-    const weekdays = [
-      'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-      'Friday', 'Saturday', 'Sunday'
-    ];
-
-    final weekday = weekdays[date.weekday - 1];
-    final month = months[date.month - 1];
-    final hour = date.hour % 12 == 0 ? 12 : date.hour % 12;
-    final minute = date.minute.toString().padLeft(2, '0');
-    final period = date.hour >= 12 ? 'PM' : 'AM';
-
-    return '$weekday, $month ${date.day}, ${date.year} • $hour:$minute $period';
-  }
-
-  IconData _getCategoryIcon() {
-    switch (_event.category.toLowerCase()) {
+  IconData _getCategoryIcon(String category) {
+    switch (category.toLowerCase()) {
       case 'technology':
         return Icons.computer;
       case 'sports':
-        return Icons.sports_basketball;
+        return Icons.sports;
       case 'leadership':
         return Icons.groups;
+      case 'career':
+        return Icons.work;
       case 'academic':
         return Icons.school;
+      case 'community':
+        return Icons.volunteer_activism;
+      case 'competition':
+        return Icons.emoji_events;
+      case 'wellness':
+        return Icons.favorite;
       default:
         return Icons.event;
     }
-  }
-
-  void _toggleRsvp() {
-    setState(() {
-      _isRegistered = !_isRegistered;
-    });
-
-    widget.onRsvpChanged(_isRegistered);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          _isRegistered
-              ? 'You have successfully RSVP\'d!'
-              : 'Your RSVP has been cancelled.',
-        ),
-      ),
-    );
   }
 
   Future<void> _editEvent() async {
@@ -93,66 +64,119 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       ),
     );
 
-    if (result == true && mounted) {
-      // Fetch the updated event from Firestore.
-      try {
-        final document = await FirebaseFirestore.instance
-            .collection('events')
-            .doc(_event.id)
-            .get();
+    if (result != true || !mounted) return;
 
-        if (document.exists && document.data() != null) {
-          final data = document.data()!;
+    try {
+      final document = await FirebaseFirestore.instance
+          .collection('events')
+          .doc(_event.id)
+          .get();
 
-          setState(() {
-            _event = Event(
-              id: document.id,
-              title: data['title'] ?? '',
-              description: data['description'] ?? '',
-              dateTime: (data['dateTime'] as Timestamp).toDate(),
-              venue: data['venue'] ?? '',
-              category: data['category'] ?? '',
-              attendeeCount: data['attendeeCount'] ?? 0,
-            );
-          });
-        }
+      if (!document.exists || document.data() == null) return;
 
-        if (!mounted) return;
+      final data = document.data()!;
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Event details refreshed successfully!'),
-          ),
+      setState(() {
+        _event = Event(
+          id: document.id,
+          title: data['title'] ?? '',
+          description: data['description'] ?? '',
+          dateTime: (data['dateTime'] as Timestamp).toDate(),
+          venue: data['venue'] ?? '',
+          category: data['category'] ?? '',
+          attendeeCount: data['attendeeCount'] ?? 0,
         );
-      } catch (error) {
-        if (!mounted) return;
+      });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Event saved, but refresh failed: $error'),
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Event details refreshed successfully!'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not refresh event: $error'),
+        ),
+      );
     }
+  }
+
+  Future<void> _deleteEvent() async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Event?'),
+        content: Text(
+          'Are you sure you want to delete "${_event.title}"? '
+          'This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete != true) return;
+
+    try {
+      await EventService().deleteEvent(_event.id);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Event deleted successfully!'),
+        ),
+      );
+
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete event: $error'),
+        ),
+      );
+    }
+  }
+
+  void _toggleRsvp() {
+    setState(() {
+      _isRegistered = !_isRegistered;
+    });
+
+    widget.onRsvpChanged(_isRegistered);
   }
 
   @override
   Widget build(BuildContext context) {
     final event = _event;
-    final theme = Theme.of(context);
-    final attendeeCount =
-        event.attendeeCount + (_isRegistered ? 1 : 0);
+
+    final formattedDate =
+        '${event.dateTime.month}/${event.dateTime.day}/${event.dateTime.year}';
+
+    final formattedTime =
+        TimeOfDay.fromDateTime(event.dateTime).format(context);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Event Details'),
-        actions: [
-          IconButton(
-            onPressed: _editEvent,
-            icon: const Icon(Icons.edit),
-            tooltip: 'Edit Event',
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -164,115 +188,234 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               width: double.infinity,
               height: 180,
               decoration: BoxDecoration(
-                color: theme.colorScheme.primaryContainer,
+                color: Theme.of(context)
+                    .colorScheme
+                    .primaryContainer,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Icon(
-                _getCategoryIcon(),
-                size: 90,
-                color: theme.colorScheme.primary,
+                _getCategoryIcon(event.category),
+                size: 80,
+                color: Theme.of(context).colorScheme.primary,
               ),
             ),
-            const SizedBox(height: 24),
 
-            // Category
-            Text(
-              event.category.toUpperCase(),
-              style: TextStyle(
-                color: theme.colorScheme.primary,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.5,
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // Title
-            Text(
-              event.title,
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
             const SizedBox(height: 20),
 
-            // Date and time
-            _buildInfoRow(
-              Icons.calendar_month,
-              'Date & Time',
-              _formatDate(event.dateTime),
+            Chip(
+              avatar: Icon(
+                _getCategoryIcon(event.category),
+                size: 18,
+              ),
+              label: Text(event.category),
             ),
-            const SizedBox(height: 16),
 
-            // Venue
+            const SizedBox(height: 12),
+
+            Text(
+              event.title,
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Event information
+            _buildInfoRow(
+              Icons.calendar_today,
+              'Date',
+              formattedDate,
+            ),
+
+            const SizedBox(height: 12),
+
+            _buildInfoRow(
+              Icons.access_time,
+              'Time',
+              formattedTime,
+            ),
+
+            const SizedBox(height: 12),
+
             _buildInfoRow(
               Icons.location_on,
               'Venue',
               event.venue,
             ),
-            const SizedBox(height: 16),
 
-            // Attendees
+            const SizedBox(height: 12),
+
             _buildInfoRow(
               Icons.people,
               'Attendees',
-              '$attendeeCount students attending',
+              '${event.attendeeCount} students attending',
             ),
-            const SizedBox(height: 28),
 
-            const Divider(),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
-            // About event
             Text(
-              'About this event',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              'About this Event',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 12),
+
+            const SizedBox(height: 10),
 
             Text(
               event.description,
-              style: theme.textTheme.bodyLarge?.copyWith(
-                height: 1.6,
-              ),
+              style: Theme.of(context).textTheme.bodyLarge,
             ),
-            const SizedBox(height: 32),
 
-            // RSVP button
+            const SizedBox(height: 30),
+
+            // Larger RSVP button
             SizedBox(
               width: double.infinity,
-              height: 55,
-              child: FilledButton.icon(
+              height: 68,
+              child: ElevatedButton.icon(
                 onPressed: _toggleRsvp,
                 icon: Icon(
                   _isRegistered
-                      ? Icons.check_circle
-                      : Icons.event_available,
+                      ? Icons.cancel_outlined
+                      : Icons.check_circle_outline,
+                  size: 28,
                 ),
                 label: Text(
-                  _isRegistered ? 'Cancel RSVP' : 'RSVP to Event',
-                  style: const TextStyle(fontSize: 16),
+                  _isRegistered
+                      ? 'CANCEL RSVP'
+                      : 'REGISTER FOR EVENT',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1,
+                  ),
                 ),
-                style: FilledButton.styleFrom(
+                style: ElevatedButton.styleFrom(
                   backgroundColor: _isRegistered
-                      ? Colors.red.shade400
-                      : theme.colorScheme.primary,
+                      ? Colors.red
+                      : const Color(0xFF5B4BDB),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 12),
 
-            Center(
-              child: Text(
-                _isRegistered
-                    ? 'You are registered for this event!'
-                    : 'Join other students at this event.',
-                style: TextStyle(
-                  color: Colors.grey.shade600,
+            const SizedBox(height: 30),
+
+            // Event management section moved below RSVP
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Theme.of(context)
+                    .colorScheme
+                    .surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .outlineVariant,
                 ),
               ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.settings,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .primary,
+                        size: 26,
+                      ),
+                      const SizedBox(width: 10),
+                      const Text(
+                        'EVENT MANAGEMENT',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  const Text(
+                    'Manage this event using the actions below.',
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  // Edit button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 58,
+                    child: ElevatedButton.icon(
+                      onPressed: _editEvent,
+                      icon: const Icon(
+                        Icons.edit,
+                        size: 26,
+                      ),
+                      label: const Text(
+                        'EDIT EVENT',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF5B4BDB),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Delete button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 58,
+                    child: ElevatedButton.icon(
+                      onPressed: _deleteEvent,
+                      icon: const Icon(
+                        Icons.delete_forever,
+                        size: 26,
+                      ),
+                      label: const Text(
+                        'DELETE EVENT',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFD32F2F),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
+
             const SizedBox(height: 20),
           ],
         ),
@@ -282,7 +425,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
   Widget _buildInfoRow(
     IconData icon,
-    String title,
+    String label,
     String value,
   ) {
     return Row(
@@ -290,29 +433,21 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       children: [
         Icon(
           icon,
-          size: 24,
           color: Theme.of(context).colorScheme.primary,
         ),
-        const SizedBox(width: 14),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                title,
+                label,
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 14,
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
-                value,
-                style: TextStyle(
-                  color: Colors.grey.shade700,
-                  fontSize: 14,
-                ),
-              ),
+              Text(value),
             ],
           ),
         ),
