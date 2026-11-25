@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 
 import '../models/event.dart';
@@ -6,6 +7,7 @@ import '../widgets/bottom_navigation.dart';
 import 'events_screen.dart';
 import 'event_details_screen.dart';
 import 'my_events_screen.dart';
+import 'add_event_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -18,7 +20,6 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
 
   final Set<String> _registeredEventIds = {};
-
   final EventService _eventService = EventService();
 
   void _toggleRsvp(Event event, bool isRegistered) {
@@ -49,18 +50,20 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _registeredEventIds.remove(event.id);
     });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('RSVP cancelled for ${event.title}'),
-      ),
-    );
   }
 
   void _selectPage(int index) {
     setState(() {
       _selectedIndex = index;
     });
+  }
+
+  Future<void> _openAddEventScreen() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const AddEventScreen(),
+      ),
+    );
   }
 
   @override
@@ -71,9 +74,12 @@ class _HomeScreenState extends State<HomeScreen> {
         if (snapshot.hasError) {
           return Scaffold(
             body: Center(
-              child: Text(
-                'Unable to load events from Firebase.\n\n${snapshot.error}',
-                textAlign: TextAlign.center,
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Text(
+                  'Unable to load events from Firebase.\n\n${snapshot.error}',
+                  textAlign: TextAlign.center,
+                ),
               ),
             ),
           );
@@ -89,7 +95,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
         final firestoreEvents = snapshot.data ?? [];
 
-        // Registered events now come from Firestore.
         final registeredEvents = firestoreEvents
             .where(
               (event) => _registeredEventIds.contains(event.id),
@@ -97,9 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
             .toList();
 
         final pages = [
-          EventsScreen(
-            onOpenEvent: _openEvent,
-          ),
+          EventsScreen(onOpenEvent: _openEvent),
           MyEventsScreen(
             registeredEvents: registeredEvents,
             onOpenEvent: _openEvent,
@@ -112,6 +115,13 @@ class _HomeScreenState extends State<HomeScreen> {
             index: _selectedIndex,
             children: pages,
           ),
+          floatingActionButton: _selectedIndex == 0
+              ? FloatingActionButton.extended(
+                  onPressed: _openAddEventScreen,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add Event'),
+                )
+              : null,
           bottomNavigationBar: BottomNavigation(
             selectedIndex: _selectedIndex,
             onDestinationSelected: _selectPage,
