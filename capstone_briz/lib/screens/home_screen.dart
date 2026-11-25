@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../data/dummy_events.dart';
 import '../models/event.dart';
+import '../services/event_service.dart';
 import '../widgets/bottom_navigation.dart';
 import 'events_screen.dart';
 import 'event_details_screen.dart';
@@ -19,11 +19,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final Set<String> _registeredEventIds = {};
 
-  List<Event> get _registeredEvents {
-    return dummyEvents
-        .where((event) => _registeredEventIds.contains(event.id))
-        .toList();
-  }
+  final EventService _eventService = EventService();
 
   void _toggleRsvp(Event event, bool isRegistered) {
     setState(() {
@@ -69,26 +65,59 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pages = [
-      EventsScreen(
-        onOpenEvent: _openEvent,
-      ),
-      MyEventsScreen(
-        registeredEvents: _registeredEvents,
-        onOpenEvent: _openEvent,
-        onCancelRsvp: _cancelRsvp,
-      ),
-    ];
+    return StreamBuilder<List<Event>>(
+      stream: _eventService.getEvents(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Scaffold(
+            body: Center(
+              child: Text(
+                'Unable to load events from Firebase.\n\n${snapshot.error}',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        }
 
-    return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: pages,
-      ),
-      bottomNavigationBar: BottomNavigation(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: _selectPage,
-      ),
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        final firestoreEvents = snapshot.data ?? [];
+
+        // Registered events now come from Firestore.
+        final registeredEvents = firestoreEvents
+            .where(
+              (event) => _registeredEventIds.contains(event.id),
+            )
+            .toList();
+
+        final pages = [
+          EventsScreen(
+            onOpenEvent: _openEvent,
+          ),
+          MyEventsScreen(
+            registeredEvents: registeredEvents,
+            onOpenEvent: _openEvent,
+            onCancelRsvp: _cancelRsvp,
+          ),
+        ];
+
+        return Scaffold(
+          body: IndexedStack(
+            index: _selectedIndex,
+            children: pages,
+          ),
+          bottomNavigationBar: BottomNavigation(
+            selectedIndex: _selectedIndex,
+            onDestinationSelected: _selectPage,
+          ),
+        );
+      },
     );
   }
 }

@@ -1,7 +1,27 @@
-import 'package:flutter/material.dart';
-import 'package:capstone_briz/screens/home_screen.dart';
 
-void main() {
+import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+
+import 'firebase_options.dart';
+import 'screens/home_screen.dart';
+import 'services/event_seed.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  print('MAIN: Initializing Firebase...');
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  print('MAIN: Firebase initialized successfully.');
+  print('MAIN: Before seeder');
+
+  await EventSeed.seedEvents();
+
+  print('MAIN: After seeder');
+
   runApp(const SchoolEventRsvpApp());
 }
 
@@ -26,7 +46,7 @@ class SchoolEventRsvpApp extends StatelessWidget {
           centerTitle: false,
         ),
       ),
-      home: HomeScreen(),
+      home: const HomeScreen(),
     );
   }
 }

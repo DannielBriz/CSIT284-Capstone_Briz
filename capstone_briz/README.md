@@ -1,5 +1,10 @@
 # School Event RSVP App
 
+**Name:** Danniel Roque T. Briz
+**Workstation Number:** 08
+
+
+## Project Description
 A Flutter application that allows students to browse school events, RSVP to attend, view attendee counts, and manage their registered events.
 
 ## Features
@@ -17,7 +22,6 @@ A Flutter application that allows students to browse school events, RSVP to atte
 - Dart
 
 ## Getting Started
-
 To run this project locally:
 
 1. Install Flutter SDK.
